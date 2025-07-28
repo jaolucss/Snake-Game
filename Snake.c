@@ -4,434 +4,293 @@
 #include <windows.h>
 #include <time.h>
 
-// Constantes do jogo
-#define BOARD_WIDTH 40
-#define BOARD_HEIGHT 20
-#define WALL '#'
-#define SNAKE_HEAD 'O'
-#define SNAKE_BODY 'o'
-#define FRUIT '*'
-#define EMPTY ' '
+// Configuracoes do jogo
+#define LARGURA 30
+#define ALTURA 15
+#define PAREDE '#'
+#define CABECA 'O'
+#define CORPO 'o'
+#define COMIDA '*'
+#define VAZIO ' '
 
-// Estrutura para representar uma posição no tabuleiro
+// Estrutura para posicao
 typedef struct {
     int x, y;
-} Position;
+} Posicao;
 
-// Estrutura do nó da lista encadeada (segmento da cobra)
-typedef struct SnakeNode {
-    Position pos;
-    struct SnakeNode* next;
-} SnakeNode;
+// No da lista encadeada (cada pedaco da cobra)
+typedef struct Pedaco {
+    Posicao pos;
+    struct Pedaco* proximo;
+} Pedaco;
 
-// Estrutura da cobra (lista encadeada)
+// A cobra (lista encadeada)
 typedef struct {
-    SnakeNode* head;  // Cabeça da cobra (primeiro nó)
-    SnakeNode* tail;  // Cauda da cobra (último nó)
-    int length;       // Tamanho atual da cobra
-    int direction;    // Direção atual: 1=cima, 2=baixo, 3=esquerda, 4=direita
-} Snake;
+    Pedaco* cabeca;
+    int tamanho;
+    int direcao; // 1=cima, 2=baixo, 3=esquerda, 4=direita
+} Cobra;
 
-// Estrutura da fruta
-typedef struct {
-    Position pos;
-    int active;
-} Fruit;
+// Variaveis globais
+Cobra cobra;
+Posicao comida;
+char tabuleiro[ALTURA][LARGURA];
+int pontos = 0;
+int fim_jogo = 0;
 
-// Variáveis globais
-Snake snake;
-Fruit fruit;
-char board[BOARD_HEIGHT][BOARD_WIDTH];
-int score = 0;
-int gameOver = 0;
-
-// Função para limpar a tela
-void clearScreen() {
+// Funcao para limpar tela
+void limpar_tela() {
     system("cls");
 }
 
-// Função para posicionar cursor
-void gotoxy(int x, int y) {
-    COORD coord;
-    coord.X = x;
-    coord.Y = y;
-    SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
+// Criar um novo pedaco da cobra
+Pedaco* criar_pedaco(int x, int y) {
+    Pedaco* novo = (Pedaco*)malloc(sizeof(Pedaco));
+    novo->pos.x = x;
+    novo->pos.y = y;
+    novo->proximo = NULL;
+    return novo;
 }
 
-// Função para esconder cursor
-void hideCursor() {
-    CONSOLE_CURSOR_INFO cursorInfo;
-    GetConsoleCursorInfo(GetStdHandle(STD_OUTPUT_HANDLE), &cursorInfo);
-    cursorInfo.bVisible = FALSE;
-    SetConsoleCursorInfo(GetStdHandle(STD_OUTPUT_HANDLE), &cursorInfo);
+// Adicionar pedaco na frente da cobra (nova cabeca)
+void adicionar_cabeca(int x, int y) {
+    Pedaco* nova_cabeca = criar_pedaco(x, y);
+    nova_cabeca->proximo = cobra.cabeca;
+    cobra.cabeca = nova_cabeca;
+    cobra.tamanho++;
 }
 
-// FUNÇÕES DA LISTA ENCADEADA
-
-// Criar um novo nó da cobra
-SnakeNode* createSnakeNode(int x, int y) {
-    SnakeNode* newNode = (SnakeNode*)malloc(sizeof(SnakeNode));
-    if (newNode == NULL) {
-        printf("Erro: Não foi possível alocar memória!\n");
-        exit(1);
-    }
-    newNode->pos.x = x;
-    newNode->pos.y = y;
-    newNode->next = NULL;
-    return newNode;
-}
-
-// Adicionar um novo segmento à cabeça da cobra
-void addToHead(int x, int y) {
-    SnakeNode* newHead = createSnakeNode(x, y);
-
-    if (snake.head == NULL) {
-        // Primeira vez - cobra vazia
-        snake.head = newHead;
-        snake.tail = newHead;
+// Remover ultimo pedaco da cobra (cauda)
+void remover_cauda() {
+    if (cobra.cabeca == NULL) return;
+    
+    if (cobra.cabeca->proximo == NULL) {
+        // So tem um pedaco
+        free(cobra.cabeca);
+        cobra.cabeca = NULL;
     } else {
-        // Adiciona à frente da cabeça atual
-        newHead->next = snake.head;
-        snake.head = newHead;
-    }
-    snake.length++;
-}
-
-// Remover o último segmento (cauda) da cobra
-void removeFromTail() {
-    if (snake.head == NULL) return;
-
-    if (snake.head == snake.tail) {
-        // Só há um nó
-        free(snake.head);
-        snake.head = NULL;
-        snake.tail = NULL;
-    } else {
-        // Encontrar o penúltimo nó
-        SnakeNode* current = snake.head;
-        while (current->next != snake.tail) {
-            current = current->next;
+        // Encontrar o penultimo pedaco
+        Pedaco* atual = cobra.cabeca;
+        while (atual->proximo->proximo != NULL) {
+            atual = atual->proximo;
         }
-
-        // Remover o último nó
-        free(snake.tail);
-        snake.tail = current;
-        snake.tail->next = NULL;
+        free(atual->proximo);
+        atual->proximo = NULL;
     }
-    snake.length--;
+    cobra.tamanho--;
 }
 
-// Verificar se uma posição está ocupada pelo corpo da cobra (exceto a cabeça)
-int isSnakeBodyPosition(int x, int y) {
-    if (snake.head == NULL) return 0;
-
-    SnakeNode* current = snake.head->next; // Pula a cabeça
-    while (current != NULL) {
-        if (current->pos.x == x && current->pos.y == y) {
-            return 1;
+// Verificar se posicao esta ocupada pela cobra
+int posicao_ocupada_cobra(int x, int y) {
+    Pedaco* atual = cobra.cabeca;
+    while (atual != NULL) {
+        if (atual->pos.x == x && atual->pos.y == y) {
+            return 1; // Verdadeiro
         }
-        current = current->next;
+        atual = atual->proximo;
     }
-    return 0;
+    return 0; // Falso
 }
 
-// Verificar se uma posição está ocupada por qualquer parte da cobra
-int isSnakePosition(int x, int y) {
-    SnakeNode* current = snake.head;
-    while (current != NULL) {
-        if (current->pos.x == x && current->pos.y == y) {
-            return 1;
-        }
-        current = current->next;
-    }
-    return 0;
-}
-
-// Liberar toda a memória da cobra
-void freeSnake() {
-    SnakeNode* current = snake.head;
-    while (current != NULL) {
-        SnakeNode* temp = current;
-        current = current->next;
-        free(temp);
-    }
-    snake.head = NULL;
-    snake.tail = NULL;
-    snake.length = 0;
-}
-
-// FUNÇÕES DO JOGO
-
-// Inicializar o tabuleiro
-void initBoard() {
-    for (int i = 0; i < BOARD_HEIGHT; i++) {
-        for (int j = 0; j < BOARD_WIDTH; j++) {
-            if (i == 0 || i == BOARD_HEIGHT - 1 || j == 0 || j == BOARD_WIDTH - 1) {
-                board[i][j] = WALL;
+// Criar o tabuleiro
+void criar_tabuleiro() {
+    for (int i = 0; i < ALTURA; i++) {
+        for (int j = 0; j < LARGURA; j++) {
+            if (i == 0 || i == ALTURA-1 || j == 0 || j == LARGURA-1) {
+                tabuleiro[i][j] = PAREDE;
             } else {
-                board[i][j] = EMPTY;
+                tabuleiro[i][j] = VAZIO;
             }
         }
     }
 }
 
-// Gerar nova fruta em posição aleatória
-void generateFruit() {
+// Colocar comida em posicao aleatoria
+void gerar_comida() {
     do {
-        fruit.pos.x = rand() % (BOARD_WIDTH - 2) + 1;
-        fruit.pos.y = rand() % (BOARD_HEIGHT - 2) + 1;
-    } while (isSnakePosition(fruit.pos.x, fruit.pos.y));
-
-    fruit.active = 1;
+        comida.x = rand() % (LARGURA - 2) + 1;
+        comida.y = rand() % (ALTURA - 2) + 1;
+    } while (posicao_ocupada_cobra(comida.x, comida.y));
 }
 
 // Inicializar o jogo
-void initGame() {
+void iniciar_jogo() {
     // Limpar cobra anterior
-    freeSnake();
-
-    // Inicializar cobra no centro do tabuleiro
-    int centerX = BOARD_WIDTH / 2;
-    int centerY = BOARD_HEIGHT / 2;
-
-    // Criar cobra inicial com 3 segmentos (ordem correta)
-    addToHead(centerX - 2, centerY);     // Cauda (primeiro a ser adicionado)
-    addToHead(centerX - 1, centerY);     // Meio
-    addToHead(centerX, centerY);         // Cabeça (último a ser adicionado)
-
-    snake.direction = 4; // Direita
-
-    // Inicializar tabuleiro
-    initBoard();
-
-    // Gerar primeira fruta
+    while (cobra.cabeca != NULL) {
+        Pedaco* temp = cobra.cabeca;
+        cobra.cabeca = cobra.cabeca->proximo;
+        free(temp);
+    }
+    
+    // Criar cobra inicial no centro
+    int centro_x = LARGURA / 2;
+    int centro_y = ALTURA / 2;
+    
+    adicionar_cabeca(centro_x, centro_y);
+    cobra.direcao = 4; // Direita
+    
+    criar_tabuleiro();
     srand(time(NULL));
-    generateFruit();
-
-    score = 0;
-    gameOver = 0;
-    hideCursor();
+    gerar_comida();
+    
+    pontos = 0;
+    fim_jogo = 0;
 }
 
-// Atualizar o tabuleiro com as posições atuais
-void updateBoard() {
-    // Limpar tabuleiro (manter apenas paredes)
-    for (int i = 1; i < BOARD_HEIGHT - 1; i++) {
-        for (int j = 1; j < BOARD_WIDTH - 1; j++) {
-            board[i][j] = EMPTY;
+// Atualizar tabuleiro com posicoes atuais
+void atualizar_tabuleiro() {
+    // Limpar area interna
+    for (int i = 1; i < ALTURA-1; i++) {
+        for (int j = 1; j < LARGURA-1; j++) {
+            tabuleiro[i][j] = VAZIO;
         }
     }
-
-    // Colocar cobra no tabuleiro
-    SnakeNode* current = snake.head;
-    int isFirst = 1;
-    while (current != NULL) {
-        if (isFirst) {
-            board[current->pos.y][current->pos.x] = SNAKE_HEAD;
-            isFirst = 0;
+    
+    // Colocar cobra
+    Pedaco* atual = cobra.cabeca;
+    int primeira = 1;
+    while (atual != NULL) {
+        if (primeira) {
+            tabuleiro[atual->pos.y][atual->pos.x] = CABECA;
+            primeira = 0;
         } else {
-            board[current->pos.y][current->pos.x] = SNAKE_BODY;
+            tabuleiro[atual->pos.y][atual->pos.x] = CORPO;
         }
-        current = current->next;
+        atual = atual->proximo;
     }
-
-    // Colocar fruta no tabuleiro
-    if (fruit.active) {
-        board[fruit.pos.y][fruit.pos.x] = FRUIT;
-    }
+    
+    // Colocar comida
+    tabuleiro[comida.y][comida.x] = COMIDA;
 }
 
-// Desenhar o tabuleiro
-void drawBoard() {
-    gotoxy(0, 0);
-    for (int i = 0; i < BOARD_HEIGHT; i++) {
-        for (int j = 0; j < BOARD_WIDTH; j++) {
-            printf("%c", board[i][j]);
+// Mostrar o tabuleiro
+void mostrar_tabuleiro() {
+    limpar_tela();
+    
+    for (int i = 0; i < ALTURA; i++) {
+        for (int j = 0; j < LARGURA; j++) {
+            printf("%c", tabuleiro[i][j]);
         }
         printf("\n");
     }
+    
+    printf("\nPontos: %d", pontos);
+    printf("\nTamanho da cobra: %d", cobra.tamanho);
+    printf("\nControles: W(cima) S(baixo) A(esquerda) D(direita) Q(sair)");
 }
 
-// Desenhar informações do jogo
-void drawGameInfo() {
-    gotoxy(BOARD_WIDTH + 2, 2);
-    printf("=== SNAKE GAME ===");
-    gotoxy(BOARD_WIDTH + 2, 4);
-    printf("Score: %d", score);
-    gotoxy(BOARD_WIDTH + 2, 5);
-    printf("Length: %d", snake.length);
-    gotoxy(BOARD_WIDTH + 2, 6);
-    printf("Direction: %d", snake.direction);
-    gotoxy(BOARD_WIDTH + 2, 8);
-    printf("Controls:");
-    gotoxy(BOARD_WIDTH + 2, 9);
-    printf("W - Cima");
-    gotoxy(BOARD_WIDTH + 2, 10);
-    printf("S - Baixo");
-    gotoxy(BOARD_WIDTH + 2, 11);
-    printf("A - Esquerda");
-    gotoxy(BOARD_WIDTH + 2, 12);
-    printf("D - Direita");
-    gotoxy(BOARD_WIDTH + 2, 13);
-    printf("Q - Sair");
-    gotoxy(BOARD_WIDTH + 2, 15);
-    printf("Lista Encadeada:");
-    gotoxy(BOARD_WIDTH + 2, 16);
-    printf("Head: (%d,%d)", snake.head ? snake.head->pos.x : -1,
-           snake.head ? snake.head->pos.y : -1);
-    gotoxy(BOARD_WIDTH + 2, 17);
-    printf("Tail: (%d,%d)", snake.tail ? snake.tail->pos.x : -1,
-           snake.tail ? snake.tail->pos.y : -1);
-
-    // Debug: mostrar todos os segmentos
-    gotoxy(BOARD_WIDTH + 2, 19);
-    printf("Segmentos:");
-    SnakeNode* current = snake.head;
-    int count = 0;
-    while (current != NULL && count < 5) {
-        gotoxy(BOARD_WIDTH + 2, 20 + count);
-        printf("[%d]: (%d,%d)", count, current->pos.x, current->pos.y);
-        current = current->next;
-        count++;
-    }
-}
-
-// Processar entrada do usuário
-void processInput() {
+// Ler tecla do jogador
+void ler_entrada() {
     if (_kbhit()) {
-        char key = _getch();
-        switch (key) {
+        char tecla = _getch();
+        switch (tecla) {
             case 'w':
             case 'W':
-                if (snake.direction != 2) snake.direction = 1; // Não pode ir para baixo se estava indo para cima
+                if (cobra.direcao != 2) cobra.direcao = 1;
                 break;
             case 's':
             case 'S':
-                if (snake.direction != 1) snake.direction = 2; // Não pode ir para cima se estava indo para baixo
+                if (cobra.direcao != 1) cobra.direcao = 2;
                 break;
             case 'a':
             case 'A':
-                if (snake.direction != 4) snake.direction = 3; // Não pode ir para direita se estava indo para esquerda
+                if (cobra.direcao != 4) cobra.direcao = 3;
                 break;
             case 'd':
             case 'D':
-                if (snake.direction != 3) snake.direction = 4; // Não pode ir para esquerda se estava indo para direita
+                if (cobra.direcao != 3) cobra.direcao = 4;
                 break;
             case 'q':
             case 'Q':
-                gameOver = 1;
+                fim_jogo = 1;
                 break;
         }
     }
 }
 
 // Mover a cobra
-void moveSnake() {
-    if (snake.head == NULL) return;
-
-    // Calcular nova posição da cabeça
-    Position newPos = snake.head->pos;
-
-    switch (snake.direction) {
-        case 1: // Cima
-            newPos.y--;
-            break;
-        case 2: // Baixo
-            newPos.y++;
-            break;
-        case 3: // Esquerda
-            newPos.x--;
-            break;
-        case 4: // Direita
-            newPos.x++;
-            break;
-        default:
-            return; // Se direção inválida, não move
+void mover_cobra() {
+    if (cobra.cabeca == NULL) return;
+    
+    // Calcular nova posicao da cabeca
+    Posicao nova_pos = cobra.cabeca->pos;
+    
+    switch (cobra.direcao) {
+        case 1: nova_pos.y--; break; // Cima
+        case 2: nova_pos.y++; break; // Baixo
+        case 3: nova_pos.x--; break; // Esquerda
+        case 4: nova_pos.x++; break; // Direita
     }
-
-    // Verificar colisão com paredes
-    if (newPos.x <= 0 || newPos.x >= BOARD_WIDTH - 1 ||
-        newPos.y <= 0 || newPos.y >= BOARD_HEIGHT - 1) {
-        gameOver = 1;
+    
+    // Verificar colisao com parede
+    if (nova_pos.x <= 0 || nova_pos.x >= LARGURA-1 || 
+        nova_pos.y <= 0 || nova_pos.y >= ALTURA-1) {
+        fim_jogo = 1;
         return;
     }
-
-    // Verificar colisão com próprio corpo (exceto cabeça)
-    if (isSnakeBodyPosition(newPos.x, newPos.y)) {
-        gameOver = 1;
+    
+    // Verificar colisao com proprio corpo
+    if (posicao_ocupada_cobra(nova_pos.x, nova_pos.y)) {
+        fim_jogo = 1;
         return;
     }
-
-    // Verificar se comeu fruta
-    int ateFood = (newPos.x == fruit.pos.x && newPos.y == fruit.pos.y);
-
-    // Adicionar nova cabeça
-    addToHead(newPos.x, newPos.y);
-
-    if (ateFood) {
-        // Cobra cresceu - não remove a cauda
-        score += 10;
-        generateFruit();
+    
+    // Verificar se comeu a comida
+    int comeu = (nova_pos.x == comida.x && nova_pos.y == comida.y);
+    
+    // Adicionar nova cabeca
+    adicionar_cabeca(nova_pos.x, nova_pos.y);
+    
+    if (comeu) {
+        // Cobra cresceu - nao remove cauda
+        pontos += 10;
+        gerar_comida();
     } else {
-        // Cobra não cresceu - remove a cauda
-        removeFromTail();
+        // Cobra nao cresceu - remove cauda
+        remover_cauda();
     }
 }
 
-// Função principal do jogo
-void gameLoop() {
-    // Desenhar estado inicial
-    updateBoard();
-    clearScreen();
-    drawBoard();
-    drawGameInfo();
-
-    while (!gameOver) {
-        processInput();
-
-        // Só move se tiver direção válida
-        if (snake.direction > 0) {
-            moveSnake();
-        }
-
-        updateBoard();
-        clearScreen();
-        drawBoard();
-        drawGameInfo();
-
-        Sleep(200); // Velocidade do jogo (mais lento para debug)
+// Loop principal do jogo
+void jogar() {
+    while (!fim_jogo) {
+        ler_entrada();
+        mover_cobra();
+        atualizar_tabuleiro();
+        mostrar_tabuleiro();
+        Sleep(300); // Velocidade do jogo
     }
 }
 
-// Exibir tela de game over
-void showGameOver() {
-    clearScreen();
-    printf("\n\n");
-    printf("  ╔══════════════════════════════╗\n");
-    printf("  ║         GAME OVER!           ║\n");
-    printf("  ║                              ║\n");
-    printf("  ║  Score Final: %-14d ║\n", score);
-    printf("  ║  Tamanho da Cobra: %-9d ║\n", snake.length);
-    printf("  ║                              ║\n");
-    printf("  ║    Pressione qualquer        ║\n");
-    printf("  ║    tecla para sair...        ║\n");
-    printf("  ╚══════════════════════════════╝\n");
-
+// Mostrar fim de jogo
+void mostrar_fim_jogo() {
+    limpar_tela();
+    printf("\n** FIM DE JOGO! **\n");
+    printf("Pontos finais: %d\n", pontos);
+    printf("Tamanho da cobra: %d\n", cobra.tamanho);
+    printf("\nPressione qualquer tecla para sair...\n");
     _getch();
 }
 
-// Função principal
+// Liberar memoria da cobra
+void limpar_cobra() {
+    while (cobra.cabeca != NULL) {
+        Pedaco* temp = cobra.cabeca;
+        cobra.cabeca = cobra.cabeca->proximo;
+        free(temp);
+    }
+}
+
+// Funcao principal
 int main() {
-    printf("Iniciando Snake com Lista Encadeada...\n");
-    printf("Pressione qualquer tecla para começar!\n");
+    printf("=== JOGO DA COBRINHA ===\n");
+    printf("Pressione qualquer tecla para comecar!\n");
     _getch();
-
-    initGame();
-    gameLoop();
-    showGameOver();
-
-    // Liberar memória
-    freeSnake();
-
+    
+    iniciar_jogo();
+    jogar();
+    mostrar_fim_jogo();
+    limpar_cobra();
+    
     return 0;
 }

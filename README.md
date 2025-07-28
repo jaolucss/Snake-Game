@@ -1,21 +1,34 @@
-# Snake-Game
+# 🐍 Jogo da Cobrinha em C (Console)  
+*Descrição:* Implementação do clássico Snake Game em C para Windows (terminal). Renderização em modo texto com controles via teclado.  
 
-# Snake Game em C (com Lista Encadeada)
+## 📌 Tópicos  
+Pré-requisitos | Como executar | Controles | Lógica | Estrutura | Exemplo | Observações | Licença  
 
-Este é um jogo da cobrinha (Snake) feito em C usando lista encadeada para representar o corpo da cobra.
+## ✅ *Pré-requisitos*  
+- *SO:* Windows  
+- *Compilador:* GCC/MinGW/MSVC  
+- *Bibliotecas:* conio.h, windows.h, stdio.h, stdlib.h, time.h  
 
-## Como funciona
+## ▶️ *Execução*  
+1. Compile: gcc cobra.c -o cobra  
+2. Execute: ./cobra  
+⚠️ Incompatível com Linux/macOS sem adaptações (depende de conio.h).  
 
-- A cobra cresce ao comer frutas (*).
-- O jogo termina se a cobra bater nas paredes ou em si mesma.
-- O corpo da cobra é controlado por uma lista encadeada.
-- A fruta aparece em posições aleatórias.
-- A pontuação e o tamanho são atualizados em tempo real.
+## 🎮 *Controles*  
+W (cima) | S (baixo) | A (esquerda) | D (direita) | Q (sair)  
 
-## Controles
+## 🧠 *Lógica*  
+- Cobra como lista encadeada (cresce ao comer).  
+- Comida aleatória em tabuleiro[][].  
+- *Fim de jogo:* Colisão (paredes/corpo) ou tecla Q.  
 
-- *W* - Cima  
-- *S* - Baixo  
-- *A* - Esquerda  
-- *D* - Direita  
-- *Q* - Sair do jogo
+## 🗂️ *Estrutura*  
+- *Structs:* Posicao (x,y), Pedaco (nó), Cobra (cabeça/tamanho/direção).  
+- *Funções-chave:* iniciar_jogo(), mover_cobra(), gerar_comida(), mostrar_tabuleiro().  
+
+## 📸 *Exemplo*  
+```shell
+##############################
+#           Ooo*            #
+##############################
+Pontos: 20 | Tamanho: 3 | Controles: W/A/S/D/Q
