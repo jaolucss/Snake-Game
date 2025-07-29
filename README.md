@@ -1,6 +1,13 @@
 # 🐍 Jogo da Cobrinha em C (Console)  
 *Descrição:* Implementação do clássico Snake Game em C para Windows (terminal). Renderização em modo texto com controles via teclado.  
 
+## 👥 Equipe de Desenvolvimento  
+- Francisco André
+- Francisco Bernardo
+- Erik Renan
+- Adonay Davyd
+- João Lucas
+
 ## 📌 Tópicos  
 Pré-requisitos | Como executar | Controles | Lógica | Estrutura | Exemplo | Observações | Licença  
 
